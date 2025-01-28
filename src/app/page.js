@@ -1,101 +1,94 @@
-import Image from "next/image";
+'use client';
 
-export default function Home() {
+import React, { useState } from "react";
+import * as ort from "onnxruntime-web";
+
+export default function DetectPage() {
+  const [prediction, setPrediction] = useState(null);
+  const [loading, setLoading] = useState(false);
+
+  const handleImageUpload = async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    setLoading(true);
+    try {
+      const modelPath = "/models/banana_detector.onnx";
+      const session = await ort.InferenceSession.create(modelPath);
+
+      const tensor = await preprocessImage(file);
+      const feeds = { input: tensor };
+      const results = await session.run(feeds);
+      const probability = results.output.data[0];
+
+      setPrediction(probability < 0.5 ? "🍌 Banana Detected!" : "❌ No Banana Detected.");
+    } catch (error) {
+      console.error("Error during prediction:", error);
+      setPrediction("Error during prediction.");
+    }
+    setLoading(false);
+  };
+
+  const preprocessImage = async (file) => {
+    const imageBitmap = await createImageBitmap(file);
+    const canvas = document.createElement("canvas");
+    const ctx = canvas.getContext("2d");
+    canvas.width = 224;
+    canvas.height = 224;
+    ctx.drawImage(imageBitmap, 0, 0, 224, 224);
+
+    const imageData = ctx.getImageData(0, 0, 224, 224);
+    const { data } = imageData;
+
+    const normalizedData = new Float32Array(3 * 224 * 224);
+    for (let i = 0; i < data.length; i += 4) {
+      normalizedData[i / 4] = (data[i] / 255 - 0.5) / 0.5; // Red
+      normalizedData[i / 4 + 224 * 224] = (data[i + 1] / 255 - 0.5) / 0.5; // Green
+      normalizedData[i / 4 + 2 * 224 * 224] = (data[i + 2] / 255 - 0.5) / 0.5; // Blue
+    }
+
+    return new ort.Tensor("float32", normalizedData, [1, 3, 224, 224]);
+  };
+
   return (
-    <div className="grid grid-rows-[20px_1fr_20px] items-center justify-items-center min-h-screen p-8 pb-20 gap-16 sm:p-20 font-[family-name:var(--font-geist-sans)]">
-      <main className="flex flex-col gap-8 row-start-2 items-center sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={180}
-          height={38}
-          priority
-        />
-        <ol className="list-inside list-decimal text-sm text-center sm:text-left font-[family-name:var(--font-geist-mono)]">
-          <li className="mb-2">
-            Get started by editing{" "}
-            <code className="bg-black/[.05] dark:bg-white/[.06] px-1 py-0.5 rounded font-semibold">
-              src/app/page.js
-            </code>
-            .
-          </li>
-          <li>Save and see your changes instantly.</li>
-        </ol>
+    <div className="min-h-screen flex flex-col items-center justify-center bg-gradient-to-r from-yellow-300 via-yellow-400 to-yellow-500 p-6">
+      <div className="w-full max-w-xl bg-white rounded-2xl shadow-lg p-8">
+        <h1 className="text-4xl font-extrabold text-yellow-600 text-center mb-6">
+          Banana Detector 🍌
+        </h1>
+        <p className="text-gray-700 text-center mb-4">
+          Upload an image, and let the detector tell you if there’s a banana!
+          The detector is still struggling to find the banana if there are too many. Let's be kind to it. 🤖
+        </p>
 
-        <div className="flex gap-4 items-center flex-col sm:flex-row">
-          <a
-            className="rounded-full border border-solid border-transparent transition-colors flex items-center justify-center bg-foreground text-background gap-2 hover:bg-[#383838] dark:hover:bg-[#ccc] text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
+        <div className="flex flex-col items-center">
+          <label
+            htmlFor="file-upload"
+            className="cursor-pointer bg-yellow-500 text-white font-semibold py-2 px-4 rounded-full shadow-md hover:bg-yellow-600 focus:outline-none focus:ring-2 focus:ring-yellow-400"
           >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={20}
-              height={20}
-            />
-            Deploy now
-          </a>
-          <a
-            className="rounded-full border border-solid border-black/[.08] dark:border-white/[.145] transition-colors flex items-center justify-center hover:bg-[#f2f2f2] dark:hover:bg-[#1a1a1a] hover:border-transparent text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5 sm:min-w-44"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Read our docs
-          </a>
+            Upload Image
+          </label>
+          <input
+            id="file-upload"
+            type="file"
+            accept="image/*"
+            onChange={handleImageUpload}
+            className="hidden"
+          />
         </div>
-      </main>
-      <footer className="row-start-3 flex gap-6 flex-wrap items-center justify-center">
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/file.svg"
-            alt="File icon"
-            width={16}
-            height={16}
-          />
-          Learn
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/window.svg"
-            alt="Window icon"
-            width={16}
-            height={16}
-          />
-          Examples
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/globe.svg"
-            alt="Globe icon"
-            width={16}
-            height={16}
-          />
-          Go to nextjs.org →
-        </a>
-      </footer>
+
+        {loading && (
+          <p className="text-center text-lg text-yellow-700 font-semibold mt-6">
+            Processing your image...
+          </p>
+        )}
+
+        {prediction && (
+          <div className="mt-6 bg-gray-100 rounded-xl p-4 shadow-md text-center">
+            <h2 className="text-2xl font-bold text-gray-800">{prediction}</h2>
+          </div>
+        )}
+      </div>
     </div>
   );
 }
